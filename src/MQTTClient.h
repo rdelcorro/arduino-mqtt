@@ -50,9 +50,12 @@ inline lwmqtt_err_t lwmqtt_arduino_network_read(void *ref, uint8_t *buffer, size
   return LWMQTT_SUCCESS;
 }
 
-inline lwmqtt_err_t lwmqtt_arduino_network_write(void *ref, uint8_t *buffer, size_t len, size_t *sent, uint32_t /*timeout*/) {
+inline lwmqtt_err_t lwmqtt_arduino_network_write(void *ref, uint8_t *buffer, size_t len, size_t *sent, uint32_t timeout) {
   // cast network reference
   auto n = (lwmqtt_arduino_network_t *)ref;
+
+  // set timeout
+  n->client->setTimeout(timeout);
 
   // write bytes
   *sent = n->client->write(buffer, len);
@@ -84,14 +87,17 @@ static void MQTTClientHandler(lwmqtt_client_t * /*client*/, void *ref, lwmqtt_st
   memcpy(terminated_topic, topic.data, topic.len);
   terminated_topic[topic.len] = '\0';
 
+
   // null terminate payload if available
+  char terminated_payload[message.payload_len + 1];
   if (message.payload != nullptr) {
-    message.payload[message.payload_len] = '\0';
+    memcpy(terminated_payload, message.payload, message.payload_len);
+    terminated_payload[message.payload_len] = '\0';
   }
 
   // call the advanced callback and return if available
   if (cb->advanced != nullptr) {
-    cb->advanced(cb->client, terminated_topic, (char *)message.payload, (int)message.payload_len);
+    cb->advanced(cb->client, terminated_topic, terminated_payload, (int)message.payload_len);
     return;
   }
 
@@ -106,7 +112,7 @@ static void MQTTClientHandler(lwmqtt_client_t * /*client*/, void *ref, lwmqtt_st
   // create payload string
   String str_payload;
   if (message.payload != nullptr) {
-    str_payload = String((const char *)message.payload);
+    str_payload = String(terminated_payload);
   }
 
   // call simple callback
